@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Split / Run</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Split / Run" />
+<meta name="theme-color" content="#14171C" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect width='180' height='180' fill='%2314171C'/%3E%3Ctext x='90' y='108' font-family='Georgia,serif' font-size='72' font-weight='700' fill='%23C89B3C' text-anchor='middle'%3ES%2FR%3C%2Ftext%3E%3C%2Fsvg%3E" />
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #14171C; overscroll-behavior-y: none; }
+  body { font-family: 'Inter', sans-serif; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select { font-family: inherit; outline: none; }
+  #root { max-width: 480px; margin: 0 auto; min-height: 100vh; }
+  ::-webkit-scrollbar { display: none; }
+</style>
+
+<script>
+  window.addEventListener("error", function (e) {
+    var el = document.getElementById("boot-status");
+    if (el) {
+      el.innerHTML = "<div style='color:#B5573C;font-weight:600;'>Something failed to load</div>" +
+        "<div style='font-size:12px;color:#8B93A3;max-width:320px;margin-top:6px;'>" + (e.message || "Unknown error") + "</div>" +
+        "<div style='font-size:12px;color:#565E6D;max-width:320px;margin-top:10px;'>Make sure you're online and opening this via its hosted https:// link.</div>";
+    }
+  }, true);
+</script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+</head>
+<body>
+<div id="root">
+  <div id="boot-status" style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#8B93A3;font-family:sans-serif;font-size:14px;padding:24px;text-align:center;">
+    <div>Loading Split / Run…</div>
+    <div style="font-size:12px;color:#565E6D;max-width:320px;">If this doesn't disappear in a few seconds, open this page via its hosted https:// link rather than as a local file.</div>
+  </div>
+</div>
+
+<script>
+const { useState, useMemo, useCallback, useEffect } = React;
+const h = React.createElement;
+
+/* ---------------------------------------------------------------------- */
+/*  Design tokens                                                          */
+/* ---------------------------------------------------------------------- */
+
+const C = {
+  bg: "#14171C", surface: "#1B1F26", surfaceRaised: "#232833", hairline: "#2E3542",
+  text: "#E9E7E0", textMuted: "#8B93A3", textFaint: "#565E6D",
+  brass: "#C89B3C", teal: "#4F9490", rust: "#B5573C",
+};
+const FONT_HEAD = "'Oswald', sans-serif";
+const FONT_BODY = "'Inter', sans-serif";
+const FONT_MONO = "'JetBrains Mono', monospace";
+
+/* ---------------------------------------------------------------------- */
+/*  Local storage helpers                                                  */
+/* ---------------------------------------------------------------------- */
+
+const LS_PREFIX = "splitrun:";
+function lsGet(key, fallback) {
+  try { const raw = localStorage.getItem(LS_PREFIX + key); return raw ? JSON.parse(raw) : fallback; }
+  catch (e) { return fallback; }
+}
+function lsSet(key, value) {
+  try { localStorage.setItem(LS_PREFIX + key, JSON.stringify(value)); } catch (e) {}
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Icons                                                                   */
+/* ---------------------------------------------------------------------- */
+
+function Icon(props) {
+  const name = props.name, size = props.size === undefined ? 16 : props.size, color = props.color === undefined ? "currentColor" : props.color;
+  const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
+  let children;
+  switch (name) {
+    case "calendar": children = [h("rect",{key:1,x:3,y:4,width:18,height:18,rx:2}), h("line",{key:2,x1:16,y1:2,x2:16,y2:6}), h("line",{key:3,x1:8,y1:2,x2:8,y2:6}), h("line",{key:4,x1:3,y1:10,x2:21,y2:10})]; break;
+    case "list": children = [h("line",{key:1,x1:8,y1:6,x2:21,y2:6}), h("line",{key:2,x1:8,y1:12,x2:21,y2:12}), h("line",{key:3,x1:8,y1:18,x2:21,y2:18}), h("polyline",{key:4,points:"3 6 4 7 6 5"}), h("polyline",{key:5,points:"3 12 4 13 6 11"}), h("polyline",{key:6,points:"3 18 4 19 6 17"})]; break;
+    case "chart": children = [h("polyline",{key:1,points:"3 17 9 11 13 15 21 6"}), h("polyline",{key:2,points:"14 6 21 6 21 13"})]; break;
+    case "check": children = [h("polyline",{key:1,points:"20 6 9 17 4 12"})]; break;
+    case "skip": children = [h("polygon",{key:1,points:"5 4 15 12 5 20 5 4"}), h("line",{key:2,x1:19,y1:5,x2:19,y2:19})]; break;
+    case "chevronLeft": children = [h("polyline",{key:1,points:"15 18 9 12 15 6"})]; break;
+    case "chevronRight": children = [h("polyline",{key:1,points:"9 18 15 12 9 6"})]; break;
+    case "undo": children = [h("path",{key:1,d:"M3 7v6h6"}), h("path",{key:2,d:"M21 17a9 9 0 10-2.13-9.36L3 13"})]; break;
+    case "plus": children = [h("line",{key:1,x1:12,y1:5,x2:12,y2:19}), h("line",{key:2,x1:5,y1:12,x2:19,y2:12})]; break;
+    case "dumbbell": children = [h("path",{key:1,d:"M6.5 6.5l11 11"}), h("path",{key:2,d:"M21 21l-1.5-1.5M3 3l1.5 1.5"}), h("path",{key:3,d:"M18 6l2 2-3 3-2-2z"}), h("path",{key:4,d:"M6 18l-2-2 3-3 2 2z"})]; break;
+    case "activity": children = [h("polyline",{key:1,points:"22 12 18 12 15 21 9 3 6 12 2 12"})]; break;
+    case "x": children = [h("line",{key:1,x1:18,y1:6,x2:6,y2:18}), h("line",{key:2,x1:6,y1:6,x2:18,y2:18})]; break;
+    case "pencil": children = [h("path",{key:1,d:"M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z"})]; break;
+    case "clock": children = [h("circle",{key:1,cx:12,cy:12,r:9}), h("line",{key:2,x1:12,y1:12,x2:12,y2:7}), h("line",{key:3,x1:12,y1:12,x2:16,y2:14})]; break;
+    case "pause": children = [h("rect",{key:1,x:6,y:4,width:4,height:16,rx:1}), h("rect",{key:2,x:14,y:4,width:4,height:16,rx:1})]; break;
+    case "play": children = [h("polygon",{key:1,points:"6 3 20 12 6 21"})]; break;
+    case "stop": children = [h("rect",{key:1,x:5,y:5,width:14,height:14,rx:2})]; break;
+    case "scale": children = [h("rect",{key:1,x:4,y:17,width:16,height:4,rx:1}), h("circle",{key:2,cx:12,cy:10,r:5}), h("line",{key:3,x1:12,y1:10,x2:14,y2:8})]; break;
+    case "calc": children = [h("rect",{key:1,x:5,y:2,width:14,height:20,rx:2}), h("line",{key:2,x1:8,y1:6,x2:16,y2:6}), h("circle",{key:3,cx:8,cy:12,r:1}), h("circle",{key:4,cx:12,cy:12,r:1}), h("circle",{key:5,cx:16,cy:12,r:1}), h("circle",{key:6,cx:8,cy:16,r:1}), h("circle",{key:7,cx:12,cy:16,r:1}), h("circle",{key:8,cx:16,cy:16,r:1})]; break;
+    default: children = [];
+  }
+  return h("svg", common, children);
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Program data                                                           */
+/* ---------------------------------------------------------------------- */
+
+const STRENGTH = {
+  upperA: { label: "Upper A", exercises: [
+    { name: "Standing / cable lateral raise", sets: "2", reps: "8–15", note: "1 RIR" },
+    { name: "Cable triceps pushdown", sets: "2", reps: "6–12", note: "1 RIR" },
+    { name: "Cable curl", sets: "2", reps: "6–12", note: "1 RIR" },
+    { name: "Incline press", sets: "2", reps: "4–8", note: "1–2 RIR" },
+    { name: "Chest-supported row", sets: "2", reps: "6–10", note: "1 RIR" },
+    { name: "Rear-delt fly", sets: "1–2", reps: "10–15", note: "1 RIR" },
+    { name: "Pulldown / pull-up", sets: "1–2", reps: "6–10", note: "1–2 RIR" },
+    { name: "Overhead triceps extension", sets: "1", reps: "8–15", note: "1 RIR" },
+    { name: "Serratus work", sets: "1–2", reps: "10–20", note: "" },
+  ]},
+  upperB: { label: "Upper B", exercises: [
+    { name: "Machine shoulder press", sets: "2", reps: "5–10", note: "1 RIR" },
+    { name: "Cable curl", sets: "2", reps: "6–12", note: "1 RIR" },
+    { name: "Cable triceps extension", sets: "2", reps: "6–12", note: "1 RIR" },
+    { name: "Flat machine / barbell press", sets: "1–2", reps: "5–8", note: "1–2 RIR" },
+    { name: "Chest-supported row", sets: "2", reps: "6–10", note: "1 RIR" },
+    { name: "Cable rear-delt fly", sets: "1", reps: "10–15", note: "" },
+    { name: "Pull-up / pulldown", sets: "2", reps: "6–10", note: "" },
+    { name: "Lateral raise", sets: "1", reps: "10–15", note: "" },
+    { name: "Serratus work", sets: "1", reps: "10–20", note: "" },
+  ]},
+  lowerA: { label: "Lower A", exercises: [
+    { name: "Hack squat", sets: "2", reps: "5–8", note: "1–2 RIR" },
+    { name: "Seated leg curl", sets: "2", reps: "6–12", note: "1 RIR" },
+    { name: "Leg extension", sets: "1", reps: "8–15", note: "1 RIR" },
+    { name: "Standing calf raise", sets: "2", reps: "6–12", note: "1 RIR" },
+    { name: "Adductor", sets: "1", reps: "8–15", note: "" },
+    { name: "Abductor", sets: "1", reps: "8–15", note: "" },
+    { name: "Machine crunch", sets: "2", reps: "8–15", note: "" },
+  ]},
+  lowerB: { label: "Lower B", exercises: [
+    { name: "Romanian deadlift", sets: "2", reps: "5–8", note: "1–2 RIR" },
+    { name: "Leg extension", sets: "2", reps: "8–15", note: "1 RIR" },
+    { name: "Seated leg curl", sets: "1", reps: "8–12", note: "1 RIR" },
+    { name: "Seated calf raise", sets: "2", reps: "6–12", note: "1 RIR" },
+    { name: "Adductor", sets: "1", reps: "8–15", note: "" },
+    { name: "Abductor", sets: "1", reps: "8–15", note: "" },
+    { name: "Machine crunch", sets: "2", reps: "8–15", note: "" },
+  ]},
+  lowerA_sat: { label: "Lower A (abbreviated)", exercises: [
+    { name: "Hack squat", sets: "2", reps: "5–8", note: "" },
+    { name: "Seated leg curl", sets: "2", reps: "6–12", note: "" },
+    { name: "Standing calf raise", sets: "2", reps: "6–12", note: "" },
+    { name: "Machine crunch", sets: "2", reps: "8–15", note: "" },
+  ]},
+  lowerB_sat: { label: "Lower B (abbreviated)", exercises: [
+    { name: "Romanian deadlift", sets: "2", reps: "5–8", note: "" },
+    { name: "Seated leg curl", sets: "2", reps: "6–12", note: "" },
+    { name: "Seated calf raise", sets: "2", reps: "6–12", note: "" },
+    { name: "Machine crunch", sets: "2", reps: "8–15", note: "" },
+  ]},
+};
+
+const CALISTHENICS = [
+  { name: "Pull-ups", sets: "3", reps: "5–7", note: "or 1–2 if capacity is ~3; stop short of failure" },
+  { name: "Dips", sets: "2–3", reps: "4–8", note: "~2 RIR" },
+  { name: "L-sit", sets: "3", reps: "10–30 sec", note: "" },
+  { name: "Handstand practice", sets: "1", reps: "5–10 min total", note: "short, high-quality bouts" },
+];
+
+const ALL_EXERCISE_NAMES = Array.from(new Set([
+  ...Object.values(STRENGTH).flatMap((t) => t.exercises.map((e) => e.name)),
+  ...CALISTHENICS.map((e) => e.name),
+]));
+
+function weekNumberFor(programIndex) { return Math.floor(programIndex / 7) + 1; }
+function vo2Detail(weekNumber) {
+  const stage = (weekNumber - 1) % 8;
+  if (stage <= 1) return "4 × 3 min hard / 3 min easy — build to ~90–95% HRmax by the later reps";
+  if (stage <= 3) return "5 × 3 min hard / 3 min easy";
+  if (stage <= 5) return "4 × 4 min hard / 3 min easy";
+  if (stage === 6) return "5 × 4 min hard / 3 min easy";
+  return "Deload — shorten or lighten the intervals";
+}
+function thresholdDetail(weekNumber) {
+  const stage = (weekNumber - 1) % 8;
+  if (stage <= 1) return "3 × 8 min @ RPE 7–8, 2–3 min easy recovery";
+  if (stage <= 3) return "2 × 12 min @ RPE 7–8, 2–3 min easy recovery";
+  if (stage <= 5) return "2 × 15 min @ RPE 7–8, 2–3 min easy recovery";
+  return "20–30 min continuous @ threshold effort";
+}
+const ZONE2_DETAIL = "30–45 min easy, conversational pace (~60–70% HRmax)";
+const CONDITIONING = {
+  vo2: { label: "VO2max intervals", detail: vo2Detail, accent: "brass" },
+  threshold: { label: "Lactate threshold", detail: thresholdDetail, accent: "brass" },
+  zone2: { label: "Zone 2", detail: () => ZONE2_DETAIL, accent: "teal" },
+};
+const CYCLE = [
+  { strength: "upperA", conditioning: "vo2" },
+  { strength: "lowerA", conditioning: "zone2" },
+  { strength: "upperB", conditioning: "threshold" },
+  { strength: "lowerB", conditioning: "zone2" },
+  { strength: "upperA", conditioning: "vo2" },
+  { strength: "lowerA_sat", conditioning: "zone2", calisthenics: true },
+  { strength: null, conditioning: null, isRest: true },
+  { strength: "upperB", conditioning: "vo2" },
+  { strength: "lowerB", conditioning: "zone2" },
+  { strength: "upperA", conditioning: "threshold" },
+  { strength: "lowerA", conditioning: "zone2" },
+  { strength: "upperB", conditioning: "vo2" },
+  { strength: "lowerB_sat", conditioning: "zone2", calisthenics: true },
+  { strength: null, conditioning: null, isRest: true },
+];
+
+/* ---------------------------------------------------------------------- */
+/*  Date helpers                                                           */
+/* ---------------------------------------------------------------------- */
+
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOW_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+function toKey(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+function fromKey(k) { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); }
+function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function daysBetween(a, b) { return Math.round((startOfDay(b) - startOfDay(a)) / 86400000); }
+function fmtShort(d) { return `${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getDate()}`; }
+function fmtLong(d) { return `${DOW_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`; }
+
+/* ---------------------------------------------------------------------- */
+/*  Program index / schedule logic                                         */
+/* ---------------------------------------------------------------------- */
+
+function computeProgramIndex(dateObj, startDateObj, statusMap) {
+  const days = daysBetween(startDateObj, dateObj);
+  if (days < 0) return null;
+  let skipsBefore = 0;
+  const dStart = startOfDay(dateObj);
+  for (const key in statusMap) {
+    if (statusMap[key] !== "skipped") continue;
+    const kd = fromKey(key);
+    if (kd >= startDateObj && kd < dStart) skipsBefore++;
+  }
+  return days - skipsBefore;
+}
+function getDayPlan(dateObj, startDateObj, statusMap) {
+  const key = toKey(dateObj);
+  const status = statusMap[key] || "pending";
+  const programIndex = computeProgramIndex(dateObj, startDateObj, statusMap);
+  if (programIndex === null) return { key, status: "before-start", programIndex: null };
+  const cyclePos = ((programIndex % 14) + 14) % 14;
+  const week = weekNumberFor(programIndex);
+  const slot = CYCLE[cyclePos];
+  const weekLetter = cyclePos < 7 ? "A" : "B";
+  return { key, status, programIndex, cyclePos, week, weekLetter, slot };
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Progressive overload + timer helpers                                   */
+/* ---------------------------------------------------------------------- */
+
+function parseRepRange(repsStr) {
+  if (!repsStr) return null;
+  const parts = repsStr.split(/[–-]/).map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return { min: parts[0], max: parts[0] };
+  return { min: parts[0], max: parts[1] };
+}
+
+function getProgressionSuggestion(exerciseName, repsStr, liftLogs, excludeDateKey) {
+  const range = parseRepRange(repsStr);
+  const history = liftLogs.filter((l) => l.exercise === exerciseName && l.date !== excludeDateKey);
+  if (history.length === 0) return { text: "No history yet — log today's weight to start tracking." };
+  let lastDate = history[0].date;
+  history.forEach((l) => { if (l.date > lastDate) lastDate = l.date; });
+  const lastSets = history.filter((l) => l.date === lastDate);
+  let topSet = lastSets[0];
+  lastSets.forEach((l) => { if (Number(l.weight) > Number(topSet.weight)) topSet = l; });
+  const repsAtTop = Number(topSet.reps) || 0;
+  if (range && repsAtTop >= range.max && Number(topSet.weight) > 0) {
+    const suggestedWeight = Math.round(Number(topSet.weight) * 1.0375 * 2) / 2;
+    return { text: `Last time: ${topSet.weight} × ${topSet.reps}. Hit the top of the range — try ~${suggestedWeight}.`, suggestedWeight };
+  }
+  if (range) {
+    const nextReps = Math.min(repsAtTop + 1, range.max) || range.min;
+    return { text: `Last time: ${topSet.weight} × ${topSet.reps}. Same weight, aim for ${nextReps}+ reps.`, suggestedWeight: Number(topSet.weight) };
+  }
+  return { text: `Last time: ${topSet.weight} × ${topSet.reps}.`, suggestedWeight: Number(topSet.weight) };
+}
+
+function getElapsedMs(session) {
+  if (!session) return 0;
+  return session.accumulatedMs + (session.isRunning && session.startedAt ? (Date.now() - session.startedAt) : 0);
+}
+function formatElapsed(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const hh = Math.floor(totalSec / 3600);
+  const mm = Math.floor((totalSec % 3600) / 60);
+  const ss = totalSec % 60;
+  return (hh > 0 ? pad2(hh) + ":" : "") + pad2(mm) + ":" + pad2(ss);
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Small UI atoms                                                         */
+/* ---------------------------------------------------------------------- */
+
+function AccentDot(props) {
+  const size = props.size === undefined ? 7 : props.size;
+  return h("span", { style: { display: "inline-block", width: size, height: size, borderRadius: 999, background: props.color, flexShrink: 0 } });
+}
+function Pill(props) {
+  return h("span", { style: { display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", fontSize: 12, color: props.color, border: `1px solid ${props.color}55`, borderRadius: 999, fontFamily: FONT_BODY } }, props.children);
+}
+function slotAccent(slot) {
+  if (!slot || slot.isRest) return C.textFaint;
+  return slot.strength && slot.strength.startsWith("upper") ? C.brass : C.teal;
+}
+function slotTitle(slot) {
+  if (!slot || slot.isRest) return "Rest";
+  const s = STRENGTH[slot.strength];
+  let t = s.label;
+  if (slot.calisthenics) t += " + Calisthenics";
+  return t;
+}
+function inputStyle() {
+  return { background: C.surface, color: C.text, border: `1px solid ${C.hairline}`, borderRadius: 6, padding: "9px 10px", fontSize: 13.5, width: "100%" };
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Minimal inline line chart                                              */
+/* ---------------------------------------------------------------------- */
+
+function MiniLineChart({ data, color, valueKey }) {
+  if (!data || data.length === 0) return null;
+  const w = 320, chH = 140, pad = 24;
+  const values = data.map((d) => d[valueKey]);
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max - min || 1;
+  const stepX = data.length > 1 ? (w - pad * 2) / (data.length - 1) : 0;
+  const points = data.map((d, i) => {
+    const x = pad + i * stepX;
+    const y = pad + (chH - pad * 2) * (1 - (d[valueKey] - min) / range);
+    return { x, y, label: d.date, value: d[valueKey] };
+  });
+  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const gridLines = [0.25, 0.5, 0.75].map((f) => {
+    const yy = pad + (chH - pad * 2) * f;
+    return h("line", { key: f, x1: pad, x2: w - pad, y1: yy, y2: yy, stroke: C.hairline, strokeDasharray: "3 3" });
+  });
+  const circles = points.map((p, i) => h("circle", { key: i, cx: p.x, cy: p.y, r: 3, fill: color }, h("title", null, `${p.label}: ${p.value}`)));
+  const labels = points.length > 0 ? [
+    h("text", { key: "a", x: points[0].x, y: chH - 4, fontSize: 9, fill: C.textFaint, textAnchor: "start" }, points[0].label),
+    h("text", { key: "b", x: points[points.length - 1].x, y: chH - 4, fontSize: 9, fill: C.textFaint, textAnchor: "end" }, points[points.length - 1].label),
+  ] : [];
+  return h("svg", { viewBox: `0 0 ${w} ${chH}`, style: { width: "100%", height: "100%" } }, gridLines, h("path", { d: path, fill: "none", stroke: color, strokeWidth: "2" }), circles, labels);
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Day detail panel                                                       */
+/* ---------------------------------------------------------------------- */
+
+function DayDetail({ dateObj, plan, onSetStatus, onClose, activeSession, onStartWorkout }) {
+  if (!plan || plan.status === "before-start") {
+    return h("div", { style: { padding: 20, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}` } },
+      h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 } },
+        h("h3", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 18, margin: 0 } }, fmtLong(dateObj)),
+        onClose ? h("button", { onClick: onClose, style: { background: "none", border: "none", padding: 4, color: C.textMuted } }, h(Icon, { name: "x", size: 16 })) : null
+      ),
+      h("p", { style: { color: C.textMuted, fontSize: 14 } }, "This date is before the program's start.")
+    );
+  }
+
+  const { slot, week, weekLetter, status, key } = plan;
+  const accent = slotAccent(slot);
+  const cond = slot.conditioning ? CONDITIONING[slot.conditioning] : null;
+  const isThisSessionActive = !!(activeSession && activeSession.dateKey === key);
+  const otherSessionActive = !!(activeSession && activeSession.dateKey !== key);
+
+  const strengthRows = !slot.isRest ? STRENGTH[slot.strength].exercises.map((e, i) =>
+    h("div", { key: i, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderTop: i === 0 ? "none" : `1px solid ${C.hairline}` } },
+      h("span", { style: { color: C.text, fontSize: 13.5 } }, e.name),
+      h("span", { style: { color: C.textMuted, fontSize: 13, fontFamily: FONT_MONO, whiteSpace: "nowrap", marginLeft: 12 } }, `${e.sets}×${e.reps}${e.note ? ` · ${e.note}` : ""}`)
+    )
+  ) : [];
+
+  const calisthenicsRows = slot.calisthenics ? CALISTHENICS.map((e, i) =>
+    h("div", { key: i, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderTop: i === 0 ? "none" : `1px solid ${C.hairline}` } },
+      h("span", { style: { color: C.text, fontSize: 13.5 } }, e.name),
+      h("span", { style: { color: C.textMuted, fontSize: 13, fontFamily: FONT_MONO, whiteSpace: "nowrap", marginLeft: 12 } }, `${e.sets}×${e.reps}${e.note ? ` · ${e.note}` : ""}`)
+    )
+  ) : [];
+
+  return h("div", { style: { padding: 20, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}` } },
+    h("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 } },
+      h("div", null,
+        h("div", { style: { color: C.textMuted, fontSize: 12, letterSpacing: 0.3 } }, `Week ${week} · ${weekLetter}`),
+        h("h3", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 20, margin: "2px 0 0" } }, fmtLong(dateObj))
+      ),
+      onClose ? h("button", { onClick: onClose, style: { background: "none", border: "none", padding: 4, color: C.textMuted } }, h(Icon, { name: "x", size: 16 })) : null
+    ),
+    h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 16 } },
+      h(AccentDot, { color: accent, size: 9 }),
+      h("span", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 16 } }, slotTitle(slot)),
+      status === "done" ? h(Pill, { color: C.brass }, "Completed") : null,
+      status === "skipped" ? h(Pill, { color: C.rust }, "Skipped → pushed") : null
+    ),
+    slot.isRest
+      ? h("p", { style: { color: C.textMuted, fontSize: 14, lineHeight: 1.6 } }, "Actually rest. Walking and light mobility are fine — this is what makes the next quality session possible.")
+      : h(React.Fragment, null,
+          !otherSessionActive ? h("button", { onClick: () => onStartWorkout(key), style: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", marginBottom: 16, background: isThisSessionActive ? C.surfaceRaised : C.teal, color: isThisSessionActive ? C.text : "#08211F", border: isThisSessionActive ? `1px solid ${C.teal}` : "none", borderRadius: 8, fontSize: 14, fontWeight: 600 } },
+              h(Icon, { name: isThisSessionActive ? "clock" : "play", size: 16 }),
+              isThisSessionActive ? ` Resume workout · ${formatElapsed(getElapsedMs(activeSession))}` : " Start workout"
+            ) : h("div", { style: { color: C.textFaint, fontSize: 12.5, marginBottom: 16 } }, "Finish your current workout to start this one."),
+          h("div", { style: { marginBottom: 16 } },
+            h("div", { style: { color: C.textFaint, fontSize: 11, letterSpacing: 0.4, marginBottom: 6 } }, "STRENGTH"),
+            h("div", { style: { display: "flex", flexDirection: "column" } }, strengthRows)
+          ),
+          slot.calisthenics ? h("div", { style: { marginBottom: 16 } },
+            h("div", { style: { color: C.textFaint, fontSize: 11, letterSpacing: 0.4, marginBottom: 6 } }, "CALISTHENICS"),
+            h("div", { style: { display: "flex", flexDirection: "column" } }, calisthenicsRows)
+          ) : null,
+          cond ? h("div", { style: { marginBottom: 8 } },
+            h("div", { style: { color: C.textFaint, fontSize: 11, letterSpacing: 0.4, marginBottom: 6 } }, "CONDITIONING"),
+            h("div", { style: { display: "flex", alignItems: "flex-start", gap: 8 } },
+              h("div", { style: { marginTop: 5 } }, h(AccentDot, { color: cond.accent === "brass" ? C.brass : C.teal })),
+              h("div", null,
+                h("div", { style: { color: C.text, fontSize: 13.5 } }, cond.label),
+                h("div", { style: { color: C.textMuted, fontSize: 13, marginTop: 2 } }, cond.detail(week))
+              )
+            )
+          ) : null
+        ),
+    !slot.isRest ? h("div", { style: { display: "flex", gap: 8, marginTop: 20 } },
+      status !== "done" ? h("button", { onClick: () => onSetStatus(key, "done"), style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", background: C.brass, color: "#1B1204", border: "none", borderRadius: 7, fontSize: 13.5, fontWeight: 600 } }, h(Icon, { name: "check", size: 15 }), " Mark complete") : null,
+      status !== "skipped" ? h("button", { onClick: () => onSetStatus(key, "skipped"), style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", background: "transparent", color: C.rust, border: `1px solid ${C.rust}66`, borderRadius: 7, fontSize: 13.5, fontWeight: 600 } }, h(Icon, { name: "skip", size: 15 }), " Skip → push") : null,
+      status !== "pending" ? h("button", { onClick: () => onSetStatus(key, "pending"), style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 12px", background: "transparent", color: C.textMuted, border: `1px solid ${C.hairline}`, borderRadius: 7, fontSize: 13.5 } }, h(Icon, { name: "undo", size: 15 })) : null
+    ) : null
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Calendar tab                                                           */
+/* ---------------------------------------------------------------------- */
+
+function CalendarTab({ startDate, statusMap, onSetStatus, activeSession, onStartWorkout }) {
+  const today = startOfDay(new Date());
+  const [viewMonth, setViewMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [selected, setSelected] = useState(today);
+
+  const cells = useMemo(() => {
+    const first = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
+    const startOffset = first.getDay();
+    const gridStart = addDays(first, -startOffset);
+    return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  }, [viewMonth]);
+
+  const selectedPlan = getDayPlan(selected, startDate, statusMap);
+
+  const dowHeaders = DOW_NAMES.map((d) => h("div", { key: d, style: { textAlign: "center", padding: "4px 0", color: C.textFaint, fontSize: 11 } }, d));
+
+  const dayCells = cells.map((d, i) => {
+    const inMonth = d.getMonth() === viewMonth.getMonth();
+    const plan = getDayPlan(d, startDate, statusMap);
+    const accent = plan.status === "before-start" ? null : slotAccent(plan.slot);
+    const isToday = daysBetween(today, d) === 0;
+    const isSelected = daysBetween(selected, d) === 0;
+    let marker = null;
+    if (accent) {
+      if (plan.status === "skipped") marker = h(Icon, { name: "x", size: 9, color: C.rust });
+      else if (plan.status === "done") marker = h(Icon, { name: "check", size: 9, color: C.brass });
+      else marker = h(AccentDot, { color: accent, size: 5 });
+    }
+    return h("button", { key: i, onClick: () => setSelected(d), style: {
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+        padding: "8px 0", background: isSelected ? C.surfaceRaised : "transparent",
+        border: isToday ? `1px solid ${C.brass}` : "1px solid transparent", borderRadius: 7,
+        opacity: inMonth ? 1 : 0.28,
+      } },
+      h("span", { style: { color: C.text, fontSize: 12.5, fontFamily: FONT_MONO } }, d.getDate()),
+      marker
+    );
+  });
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 16 } },
+    h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+      h("h2", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 20, margin: 0 } }, `${MONTH_NAMES[viewMonth.getMonth()]} ${viewMonth.getFullYear()}`),
+      h("div", { style: { display: "flex", gap: 4 } },
+        h("button", { onClick: () => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)), style: { background: "none", padding: 6, color: C.textMuted, border: `1px solid ${C.hairline}`, borderRadius: 6 } }, h(Icon, { name: "chevronLeft", size: 16 })),
+        h("button", { onClick: () => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1)), style: { background: "none", padding: 6, color: C.textMuted, border: `1px solid ${C.hairline}`, borderRadius: 6 } }, h(Icon, { name: "chevronRight", size: 16 }))
+      )
+    ),
+    h("div", { style: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 } }, dowHeaders, dayCells),
+    h("div", { style: { display: "flex", alignItems: "center", gap: 16, padding: "0 4px" } },
+      h("div", { style: { display: "flex", alignItems: "center", gap: 6 } }, h(AccentDot, { color: C.brass }), h("span", { style: { color: C.textMuted, fontSize: 11.5 } }, "Upper")),
+      h("div", { style: { display: "flex", alignItems: "center", gap: 6 } }, h(AccentDot, { color: C.teal }), h("span", { style: { color: C.textMuted, fontSize: 11.5 } }, "Lower")),
+      h("div", { style: { display: "flex", alignItems: "center", gap: 6 } }, h(AccentDot, { color: C.textFaint }), h("span", { style: { color: C.textMuted, fontSize: 11.5 } }, "Rest"))
+    ),
+    h(DayDetail, { dateObj: selected, plan: selectedPlan, onSetStatus, activeSession, onStartWorkout })
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  This Week tab                                                          */
+/* ---------------------------------------------------------------------- */
+
+function ThisWeekTab({ startDate, statusMap, onSetStatus, activeSession, onStartWorkout }) {
+  const today = startOfDay(new Date());
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+  const [openKey, setOpenKey] = useState(toKey(today));
+
+  const rows = days.map((d) => {
+    const plan = getDayPlan(d, startDate, statusMap);
+    const key = toKey(d);
+    const isOpen = openKey === key;
+    const isToday = daysBetween(today, d) === 0;
+    const accent = plan.status === "before-start" ? C.textFaint : slotAccent(plan.slot);
+    return h("div", { key, style: { borderBottom: `1px solid ${C.hairline}` } },
+      h("button", { onClick: () => setOpenKey(isOpen ? null : key), style: { width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", background: "none", border: "none" } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
+          h(AccentDot, { color: accent, size: 8 }),
+          h("div", { style: { textAlign: "left" } },
+            h("div", { style: { color: C.text, fontSize: 14, fontWeight: isToday ? 600 : 400 } }, `${fmtShort(d)}${isToday ? " · Today" : ""}`),
+            h("div", { style: { color: C.textMuted, fontSize: 12.5, marginTop: 1 } }, plan.status === "before-start" ? "Not started yet" : slotTitle(plan.slot))
+          )
+        ),
+        h("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+          plan.status === "done" ? h(Pill, { color: C.brass }, "Done") : null,
+          plan.status === "skipped" ? h(Pill, { color: C.rust }, "Skipped") : null,
+          activeSession && activeSession.dateKey === key ? h(Pill, { color: C.teal }, "In progress") : null,
+          h("span", { style: { transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", display: "flex" } }, h(Icon, { name: "chevronRight", size: 15, color: C.textFaint }))
+        )
+      ),
+      isOpen ? h("div", { style: { paddingBottom: 16 } }, h(DayDetail, { dateObj: d, plan, onSetStatus, activeSession, onStartWorkout })) : null
+    );
+  });
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 2 } },
+    h("h2", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 20, marginBottom: 4 } }, "Next 7 days"),
+    rows
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Workout session view                                                   */
+/* ---------------------------------------------------------------------- */
+
+function ExerciseSessionCard({ exercise, loggedSets, suggestion, onAddSet, onRemoveSet }) {
+  const [weight, setWeight] = useState(suggestion && suggestion.suggestedWeight ? String(suggestion.suggestedWeight) : "");
+  const [reps, setReps] = useState("");
+
+  const rows = loggedSets.map((s, i) => h("div", { key: s.id, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderTop: i === 0 ? "none" : `1px solid ${C.hairline}` } },
+    h("span", { style: { color: C.text, fontSize: 13, fontFamily: FONT_MONO } }, `Set ${i + 1}: ${s.weight} × ${s.reps}`),
+    h("button", { onClick: () => onRemoveSet(s.id), style: { background: "none", border: "none", color: C.textFaint, padding: 4, display: "flex" } }, h(Icon, { name: "x", size: 13 }))
+  ));
+
+  return h("div", { style: { padding: 14, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}` } },
+    h("div", { style: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 } },
+      h("span", { style: { color: C.text, fontSize: 14, fontWeight: 600 } }, exercise.name),
+      h("span", { style: { color: C.textMuted, fontSize: 12, fontFamily: FONT_MONO, whiteSpace: "nowrap" } }, `Target ${exercise.sets}×${exercise.reps}`)
+    ),
+    suggestion && suggestion.text ? h("div", { style: { color: C.teal, fontSize: 12, marginTop: 4 } }, suggestion.text) : null,
+    rows.length > 0 ? h("div", { style: { marginTop: 8 } }, rows) : null,
+    h("div", { style: { display: "flex", gap: 8, marginTop: 10 } },
+      h("input", { placeholder: "Weight", inputMode: "decimal", value: weight, onChange: (e) => setWeight(e.target.value), style: { ...inputStyle(), flex: 1 } }),
+      h("input", { placeholder: "Reps", inputMode: "numeric", value: reps, onChange: (e) => setReps(e.target.value), style: { ...inputStyle(), flex: 1 } }),
+      h("button", { onClick: () => { if (!reps) return; onAddSet(weight || 0, reps); setReps(""); }, style: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0 14px", background: C.brass, color: "#1B1204", border: "none", borderRadius: 7, fontWeight: 600 } }, h(Icon, { name: "plus", size: 15 }))
+    )
+  );
+}
+
+function WorkoutSessionView({ dateObj, plan, session, liftLogs, onAddSet, onRemoveSet, onTogglePause, onEnd, onMinimize }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!session.isRunning) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [session.isRunning, session.startedAt]);
+
+  const elapsedMs = getElapsedMs(session);
+  const slot = plan.slot;
+  const exercises = slot.isRest ? [] : STRENGTH[slot.strength].exercises.concat(slot.calisthenics ? CALISTHENICS : []);
+
+  const cards = exercises.map((ex, i) => {
+    const loggedForEx = session.loggedSets.filter((s) => s.exercise === ex.name);
+    const suggestion = getProgressionSuggestion(ex.name, ex.reps, liftLogs, session.dateKey);
+    return h(ExerciseSessionCard, { key: ex.name + i, exercise: ex, loggedSets: loggedForEx, suggestion, onAddSet: (w, r) => onAddSet(ex.name, w, r), onRemoveSet });
+  });
+
+  return h("div", { style: { background: C.bg, minHeight: "100vh", fontFamily: FONT_BODY, display: "flex", flexDirection: "column" } },
+    h("div", { style: { padding: "16px 20px", borderBottom: `1px solid ${C.hairline}`, display: "flex", flexDirection: "column", gap: 10 } },
+      h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+        h("button", { onClick: onMinimize, style: { background: "none", border: "none", color: C.textMuted, padding: 4, display: "flex", alignItems: "center", gap: 4, fontSize: 13 } }, h(Icon, { name: "chevronLeft", size: 16 }), " Minimize"),
+        h("div", { style: { color: C.textMuted, fontSize: 12.5 } }, fmtLong(dateObj))
+      ),
+      h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+          h(Icon, { name: "clock", size: 18, color: C.brass }),
+          h("span", { style: { fontFamily: FONT_MONO, fontSize: 26, color: C.text } }, formatElapsed(elapsedMs))
+        ),
+        h("div", { style: { display: "flex", gap: 8 } },
+          h("button", { onClick: onTogglePause, style: { display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: C.surfaceRaised, color: C.text, border: `1px solid ${C.hairline}`, borderRadius: 7, fontSize: 13 } }, h(Icon, { name: session.isRunning ? "pause" : "play", size: 14 }), session.isRunning ? " Pause" : " Resume"),
+          h("button", { onClick: onEnd, style: { display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: C.brass, color: "#1B1204", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600 } }, h(Icon, { name: "stop", size: 14 }), " End")
+        )
+      ),
+      h("div", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 16 } }, slotTitle(slot))
+    ),
+    h("div", { style: { flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 } },
+      cards,
+      slot.conditioning ? h("div", { style: { padding: 14, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}`, color: C.textMuted, fontSize: 12.5 } }, `Don't forget conditioning: ${CONDITIONING[slot.conditioning].label} — ${CONDITIONING[slot.conditioning].detail(plan.week)}`) : null
+    )
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Progress tab: forms                                                    */
+/* ---------------------------------------------------------------------- */
+
+function LiftForm({ onAdd }) {
+  const [exercise, setExercise] = useState(ALL_EXERCISE_NAMES[0]);
+  const [date, setDate] = useState(toKey(new Date()));
+  const [weight, setWeight] = useState("");
+  const [reps, setReps] = useState("");
+  const [sets, setSets] = useState("");
+
+  const options = ALL_EXERCISE_NAMES.map((n) => h("option", { key: n, value: n }, n));
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 8, padding: 16, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}` } },
+    h("select", { value: exercise, onChange: (e) => setExercise(e.target.value), style: inputStyle() }, options),
+    h("input", { type: "date", value: date, onChange: (e) => setDate(e.target.value), style: inputStyle() }),
+    h("div", { style: { display: "flex", gap: 8 } },
+      h("input", { placeholder: "Weight", inputMode: "decimal", value: weight, onChange: (e) => setWeight(e.target.value), style: inputStyle() }),
+      h("input", { placeholder: "Reps", inputMode: "numeric", value: reps, onChange: (e) => setReps(e.target.value), style: inputStyle() }),
+      h("input", { placeholder: "Sets", inputMode: "numeric", value: sets, onChange: (e) => setSets(e.target.value), style: inputStyle() })
+    ),
+    h("button", { onClick: () => {
+        if (!weight) return;
+        onAdd({ id: Date.now() + Math.random(), exercise, date, weight: Number(weight), reps: reps || "", sets: sets || "" });
+        setWeight(""); setReps(""); setSets("");
+      }, style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", marginTop: 4, background: C.brass, color: "#1B1204", border: "none", borderRadius: 7, fontSize: 13.5, fontWeight: 600 } }, h(Icon, { name: "plus", size: 15 }), " Log set")
+  );
+}
+
+function RunForm({ onAdd }) {
+  const [type, setType] = useState("vo2");
+  const [date, setDate] = useState(toKey(new Date()));
+  const [duration, setDuration] = useState("");
+  const [rpe, setRpe] = useState("");
+  const [notes, setNotes] = useState("");
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 8, padding: 16, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}` } },
+    h("select", { value: type, onChange: (e) => setType(e.target.value), style: inputStyle() },
+      h("option", { value: "vo2" }, "VO2max intervals"),
+      h("option", { value: "threshold" }, "Lactate threshold"),
+      h("option", { value: "zone2" }, "Zone 2"),
+      h("option", { value: "other" }, "Other")
+    ),
+    h("input", { type: "date", value: date, onChange: (e) => setDate(e.target.value), style: inputStyle() }),
+    h("div", { style: { display: "flex", gap: 8 } },
+      h("input", { placeholder: "Duration (min)", inputMode: "numeric", value: duration, onChange: (e) => setDuration(e.target.value), style: inputStyle() }),
+      h("input", { placeholder: "RPE 1–10", inputMode: "numeric", value: rpe, onChange: (e) => setRpe(e.target.value), style: inputStyle() })
+    ),
+    h("input", { placeholder: "Notes (optional)", value: notes, onChange: (e) => setNotes(e.target.value), style: inputStyle() }),
+    h("button", { onClick: () => {
+        if (!duration) return;
+        onAdd({ id: Date.now() + Math.random(), type, date, duration: Number(duration), rpe: rpe || "", notes });
+        setDuration(""); setRpe(""); setNotes("");
+      }, style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", marginTop: 4, background: C.teal, color: "#08211F", border: "none", borderRadius: 7, fontSize: 13.5, fontWeight: 600 } }, h(Icon, { name: "plus", size: 15 }), " Log session")
+  );
+}
+
+function BodyWeightForm({ onAdd }) {
+  const [date, setDate] = useState(toKey(new Date()));
+  const [weight, setWeight] = useState("");
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 8, padding: 16, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}` } },
+    h("input", { type: "date", value: date, onChange: (e) => setDate(e.target.value), style: inputStyle() }),
+    h("input", { placeholder: "Body weight", inputMode: "decimal", value: weight, onChange: (e) => setWeight(e.target.value), style: inputStyle() }),
+    h("button", { onClick: () => {
+        if (!weight) return;
+        onAdd({ id: Date.now() + Math.random(), date, weight: Number(weight) });
+        setWeight("");
+      }, style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", marginTop: 4, background: C.brass, color: "#1B1204", border: "none", borderRadius: 7, fontSize: 13.5, fontWeight: 600 } }, h(Icon, { name: "plus", size: 15 }), " Log weight")
+  );
+}
+
+function OneRepMaxCalc() {
+  const [weight, setWeight] = useState("");
+  const [reps, setReps] = useState("");
+  const w = parseFloat(weight);
+  const r = parseInt(reps, 10);
+  const valid = w > 0 && r > 0 && r <= 15;
+  const oneRM = valid ? w * (1 + r / 30) : null;
+  const rows = valid ? Array.from({ length: 10 }, (_, i) => i + 1).map((rr) => ({ reps: rr, weight: Math.round((oneRM / (1 + rr / 30)) * 2) / 2 })) : [];
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    h("div", { style: { display: "flex", flexDirection: "column", gap: 8, padding: 16, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}` } },
+      h("div", { style: { color: C.textFaint, fontSize: 11, letterSpacing: 0.4 } }, "ENTER A RECENT (OR BELIEVED) LIFT"),
+      h("div", { style: { display: "flex", gap: 8 } },
+        h("input", { placeholder: "Weight", inputMode: "decimal", value: weight, onChange: (e) => setWeight(e.target.value), style: inputStyle() }),
+        h("input", { placeholder: "Reps", inputMode: "numeric", value: reps, onChange: (e) => setReps(e.target.value), style: inputStyle() })
+      )
+    ),
+    valid ? h("div", { style: { padding: 16, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}` } },
+      h("div", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 18 } }, `Estimated 1RM: ${Math.round(oneRM * 2) / 2}`),
+      h("div", { style: { color: C.textFaint, fontSize: 11, marginTop: 2 } }, "Epley formula estimate"),
+      h("div", { style: { display: "flex", flexDirection: "column", marginTop: 10 } }, rows.map((row) =>
+        h("div", { key: row.reps, style: { display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: `1px solid ${C.hairline}` } },
+          h("span", { style: { color: C.textMuted, fontSize: 13 } }, `${row.reps} rep${row.reps > 1 ? "s" : ""}`),
+          h("span", { style: { color: C.text, fontSize: 13, fontFamily: FONT_MONO } }, row.weight)
+        )
+      ))
+    ) : h("div", { style: { color: C.textFaint, fontSize: 12.5, padding: "0 4px" } }, "Enter a weight and rep count to see estimates.")
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Progress tab                                                           */
+/* ---------------------------------------------------------------------- */
+
+function ProgressTab({ liftLogs, runLogs, bodyWeightLogs, onAddLift, onAddRun, onAddBodyWeight }) {
+  const [mode, setMode] = useState("lift");
+  const [liftExercise, setLiftExercise] = useState(ALL_EXERCISE_NAMES[0]);
+  const [runType, setRunType] = useState("vo2");
+
+  const liftChartData = useMemo(() => liftLogs.filter((l) => l.exercise === liftExercise).sort((a, b) => a.date.localeCompare(b.date)).map((l) => ({ date: fmtShort(fromKey(l.date)), weight: l.weight })), [liftLogs, liftExercise]);
+  const runChartData = useMemo(() => runLogs.filter((r) => r.type === runType).sort((a, b) => a.date.localeCompare(b.date)).map((r) => ({ date: fmtShort(fromKey(r.date)), duration: r.duration })), [runLogs, runType]);
+  const bodyChartData = useMemo(() => bodyWeightLogs.slice().sort((a, b) => a.date.localeCompare(b.date)).map((b) => ({ date: fmtShort(fromKey(b.date)), weight: b.weight })), [bodyWeightLogs]);
+
+  const tabBtn = (key, label, iconName) => h("button", { key, onClick: () => setMode(key), style: {
+      flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "8px 0",
+      background: "none", border: "none", borderBottom: `2px solid ${mode === key ? C.brass : "transparent"}`,
+      color: mode === key ? C.text : C.textMuted, fontSize: 11,
+    } }, h(Icon, { name: iconName, size: 15 }), label);
+
+  const selectStyle = { background: C.surface, color: C.text, border: `1px solid ${C.hairline}`, borderRadius: 6, padding: "6px 8px", fontSize: 13 };
+  const liftExOptions = ALL_EXERCISE_NAMES.map((n) => h("option", { key: n, value: n }, n));
+
+  const liftRecentRows = liftLogs.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12).map((l) =>
+    h("div", { key: l.id, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: `1px solid ${C.hairline}` } },
+      h("div", null, h("div", { style: { color: C.text, fontSize: 13 } }, l.exercise), h("div", { style: { color: C.textFaint, fontSize: 11.5 } }, fmtShort(fromKey(l.date)))),
+      h("div", { style: { color: C.textMuted, fontSize: 13, fontFamily: FONT_MONO } }, `${l.weight}${l.reps ? ` × ${l.reps}` : ""}${l.sets ? ` × ${l.sets}` : ""}`)
+    )
+  );
+
+  const runRecentRows = runLogs.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12).map((r) => {
+    const condInfo = CONDITIONING[r.type];
+    return h("div", { key: r.id, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: `1px solid ${C.hairline}` } },
+      h("div", null, h("div", { style: { color: C.text, fontSize: 13 } }, condInfo ? condInfo.label : "Other"), h("div", { style: { color: C.textFaint, fontSize: 11.5 } }, `${fmtShort(fromKey(r.date))}${r.notes ? ` · ${r.notes}` : ""}`)),
+      h("div", { style: { color: C.textMuted, fontSize: 13, fontFamily: FONT_MONO } }, `${r.duration}min${r.rpe ? ` · RPE ${r.rpe}` : ""}`)
+    );
+  });
+
+  const bodyRecentRows = bodyWeightLogs.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12).map((b) =>
+    h("div", { key: b.id, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: `1px solid ${C.hairline}` } },
+      h("div", { style: { color: C.text, fontSize: 13 } }, fmtShort(fromKey(b.date))),
+      h("div", { style: { color: C.textMuted, fontSize: 13, fontFamily: FONT_MONO } }, b.weight)
+    )
+  );
+
+  const liftSection = h(React.Fragment, null,
+    h(LiftForm, { onAdd: onAddLift }),
+    h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+      h("span", { style: { color: C.textFaint, fontSize: 11, letterSpacing: 0.4 } }, "TREND"),
+      h("select", { value: liftExercise, onChange: (e) => setLiftExercise(e.target.value), style: selectStyle }, liftExOptions)
+    ),
+    h("div", { style: { height: 160, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}`, padding: 12 } },
+      liftChartData.length > 0 ? h(MiniLineChart, { data: liftChartData, color: C.brass, valueKey: "weight" }) : h("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: C.textFaint, fontSize: 12.5 } }, "No sets logged for this exercise yet")
+    ),
+    h("div", { style: { display: "flex", flexDirection: "column" } }, liftRecentRows)
+  );
+
+  const runSection = h(React.Fragment, null,
+    h(RunForm, { onAdd: onAddRun }),
+    h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+      h("span", { style: { color: C.textFaint, fontSize: 11, letterSpacing: 0.4 } }, "TREND"),
+      h("select", { value: runType, onChange: (e) => setRunType(e.target.value), style: selectStyle },
+        h("option", { value: "vo2" }, "VO2max intervals"),
+        h("option", { value: "threshold" }, "Lactate threshold"),
+        h("option", { value: "zone2" }, "Zone 2"),
+        h("option", { value: "other" }, "Other")
+      )
+    ),
+    h("div", { style: { height: 160, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}`, padding: 12 } },
+      runChartData.length > 0 ? h(MiniLineChart, { data: runChartData, color: C.teal, valueKey: "duration" }) : h("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: C.textFaint, fontSize: 12.5 } }, "No sessions logged for this type yet")
+    ),
+    h("div", { style: { display: "flex", flexDirection: "column" } }, runRecentRows)
+  );
+
+  const bodySection = h(React.Fragment, null,
+    h(BodyWeightForm, { onAdd: onAddBodyWeight }),
+    h("div", { style: { color: C.textFaint, fontSize: 11, letterSpacing: 0.4 } }, "TREND"),
+    h("div", { style: { height: 160, background: C.surfaceRaised, borderRadius: 10, border: `1px solid ${C.hairline}`, padding: 12 } },
+      bodyChartData.length > 0 ? h(MiniLineChart, { data: bodyChartData, color: C.brass, valueKey: "weight" }) : h("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: C.textFaint, fontSize: 12.5 } }, "No body weight logged yet")
+    ),
+    h("div", { style: { display: "flex", flexDirection: "column" } }, bodyRecentRows)
+  );
+
+  let activeSection = liftSection;
+  if (mode === "run") activeSection = runSection;
+  else if (mode === "body") activeSection = bodySection;
+  else if (mode === "orm") activeSection = h(OneRepMaxCalc);
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 16 } },
+    h("h2", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 20, margin: 0 } }, "Progress"),
+    h("div", { style: { display: "flex", borderBottom: `1px solid ${C.hairline}` } },
+      tabBtn("lift", "Lift", "dumbbell"), tabBtn("run", "Cardio", "activity"), tabBtn("body", "Body", "scale"), tabBtn("orm", "1RM", "calc")
+    ),
+    activeSection
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Root app                                                               */
+/* ---------------------------------------------------------------------- */
+
+function FitnessApp() {
+  const [tab, setTab] = useState("week");
+  const [startDate, setStartDate] = useState(() => {
+    const meta = lsGet("program-meta", null);
+    return meta && meta.startDate ? startOfDay(fromKey(meta.startDate)) : startOfDay(new Date());
+  });
+  const [statusMap, setStatusMap] = useState(() => lsGet("day-status", {}));
+  const [liftLogs, setLiftLogs] = useState(() => lsGet("lift-logs", []));
+  const [runLogs, setRunLogs] = useState(() => lsGet("run-logs", []));
+  const [bodyWeightLogs, setBodyWeightLogs] = useState(() => lsGet("body-weight-logs", []));
+  const [activeSession, setActiveSession] = useState(() => lsGet("active-session", null));
+  const [sessionViewOpen, setSessionViewOpen] = useState(false);
+  const [editingStart, setEditingStart] = useState(false);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!activeSession || !activeSession.isRunning) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [activeSession && activeSession.isRunning, activeSession && activeSession.startedAt]);
+
+  const persistSession = useCallback((updater) => {
+    setActiveSession((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      lsSet("active-session", next);
+      return next;
+    });
+  }, []);
+
+  const handleSetStatus = useCallback((dateKey, status) => {
+    setStatusMap((prev) => {
+      const next = { ...prev };
+      if (status === "pending") delete next[dateKey]; else next[dateKey] = status;
+      lsSet("day-status", next);
+      return next;
+    });
+  }, []);
+
+  const persistStartDate = useCallback((d) => {
+    const sd = startOfDay(d);
+    setStartDate(sd);
+    lsSet("program-meta", { startDate: toKey(sd) });
+  }, []);
+
+  const handleAddLift = useCallback((entry) => {
+    setLiftLogs((prev) => { const next = [...prev, entry]; lsSet("lift-logs", next); return next; });
+  }, []);
+  const handleAddRun = useCallback((entry) => {
+    setRunLogs((prev) => { const next = [...prev, entry]; lsSet("run-logs", next); return next; });
+  }, []);
+  const handleAddBodyWeight = useCallback((entry) => {
+    setBodyWeightLogs((prev) => { const next = [...prev, entry]; lsSet("body-weight-logs", next); return next; });
+  }, []);
+
+  const handleStartWorkout = useCallback((dateKey) => {
+    setActiveSession((prev) => {
+      if (prev && prev.dateKey === dateKey) { setSessionViewOpen(true); return prev; }
+      if (prev && prev.dateKey !== dateKey) return prev;
+      const fresh = { dateKey, startedAt: Date.now(), accumulatedMs: 0, isRunning: true, loggedSets: [] };
+      lsSet("active-session", fresh);
+      setSessionViewOpen(true);
+      return fresh;
+    });
+  }, []);
+
+  const handleAddSet = useCallback((exerciseName, weight, reps) => {
+    persistSession((prev) => prev ? { ...prev, loggedSets: [...prev.loggedSets, { id: Date.now() + Math.random(), exercise: exerciseName, weight: Number(weight) || 0, reps: Number(reps) || 0 }] } : prev);
+  }, [persistSession]);
+
+  const handleRemoveSet = useCallback((id) => {
+    persistSession((prev) => prev ? { ...prev, loggedSets: prev.loggedSets.filter((s) => s.id !== id) } : prev);
+  }, [persistSession]);
+
+  const handleTogglePause = useCallback(() => {
+    persistSession((prev) => {
+      if (!prev) return prev;
+      if (prev.isRunning) return { ...prev, isRunning: false, accumulatedMs: prev.accumulatedMs + (Date.now() - prev.startedAt), startedAt: null };
+      return { ...prev, isRunning: true, startedAt: Date.now() };
+    });
+  }, [persistSession]);
+
+  const handleEndWorkout = useCallback(() => {
+    setActiveSession((prev) => {
+      if (!prev) return prev;
+      if (prev.loggedSets.length > 0) {
+        const newEntries = prev.loggedSets.map((s) => ({ id: s.id, exercise: s.exercise, date: prev.dateKey, weight: s.weight, reps: String(s.reps), sets: "" }));
+        setLiftLogs((prevLogs) => { const next = [...prevLogs, ...newEntries]; lsSet("lift-logs", next); return next; });
+      }
+      handleSetStatus(prev.dateKey, "done");
+      lsSet("active-session", null);
+      return null;
+    });
+    setSessionViewOpen(false);
+  }, [handleSetStatus]);
+
+  const handleMinimize = useCallback(() => setSessionViewOpen(false), []);
+
+  if (sessionViewOpen && activeSession) {
+    const dateObj = fromKey(activeSession.dateKey);
+    const plan = getDayPlan(dateObj, startDate, statusMap);
+    return h(WorkoutSessionView, {
+      dateObj, plan, session: activeSession, liftLogs,
+      onAddSet: handleAddSet, onRemoveSet: handleRemoveSet,
+      onTogglePause: handleTogglePause, onEnd: handleEndWorkout, onMinimize: handleMinimize,
+    });
+  }
+
+  const todayPlan = getDayPlan(startOfDay(new Date()), startDate, statusMap);
+
+  let body;
+  if (tab === "calendar") body = h(CalendarTab, { startDate, statusMap, onSetStatus: handleSetStatus, activeSession, onStartWorkout: handleStartWorkout });
+  else if (tab === "week") body = h(ThisWeekTab, { startDate, statusMap, onSetStatus: handleSetStatus, activeSession, onStartWorkout: handleStartWorkout });
+  else body = h(ProgressTab, { liftLogs, runLogs, bodyWeightLogs, onAddLift: handleAddLift, onAddRun: handleAddRun, onAddBodyWeight: handleAddBodyWeight });
+
+  const navItems = [
+    { key: "calendar", label: "Calendar", iconName: "calendar" },
+    { key: "week", label: "This Week", iconName: "list" },
+    { key: "progress", label: "Progress", iconName: "chart" },
+  ].map((item) => h("button", { key: item.key, onClick: () => setTab(item.key), style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 0", background: "none", border: "none", color: tab === item.key ? C.brass : C.textFaint } },
+    h(Icon, { name: item.iconName, size: 18 }), h("span", { style: { fontSize: 10.5 } }, item.label)
+  ));
+
+  return h("div", { style: { background: C.bg, minHeight: "100vh", fontFamily: FONT_BODY, display: "flex", flexDirection: "column" } },
+    h("div", { style: { padding: "20px 20px 16px", borderBottom: `1px solid ${C.hairline}` } },
+      h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+        h("div", null,
+          h("div", { style: { fontFamily: FONT_HEAD, color: C.text, fontSize: 22, letterSpacing: 0.5 } }, "SPLIT / RUN"),
+          h("div", { style: { color: C.textMuted, fontSize: 12.5, marginTop: 2 } }, todayPlan.status === "before-start" ? `Program starts ${fmtShort(startDate)}` : `Week ${todayPlan.week} · ${todayPlan.weekLetter} — ${slotTitle(todayPlan.slot)}`)
+        ),
+        h("button", { onClick: () => setEditingStart((v) => !v), style: { background: "none", border: "none", padding: 8, color: C.textFaint } }, h(Icon, { name: "pencil", size: 15 }))
+      ),
+      editingStart ? h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 12 } },
+        h("span", { style: { color: C.textMuted, fontSize: 12.5 } }, "Program start date"),
+        h("input", { type: "date", value: toKey(startDate), onChange: (e) => persistStartDate(fromKey(e.target.value)), style: { background: C.surface, color: C.text, border: `1px solid ${C.hairline}`, borderRadius: 6, padding: "5px 8px", fontSize: 13 } })
+      ) : null
+    ),
+    h("div", { style: { padding: "20px 20px", flex: 1 } }, body),
+    activeSession ? h("button", { onClick: () => setSessionViewOpen(true), style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", background: C.brass, color: "#1B1204", border: "none", fontSize: 13, fontWeight: 600 } },
+      h("span", { style: { display: "flex", alignItems: "center", gap: 6 } }, h(Icon, { name: "clock", size: 14 }), `Workout in progress · ${formatElapsed(getElapsedMs(activeSession))}`),
+      h("span", null, "Resume →")
+    ) : null,
+    h("div", { style: { display: "flex", borderTop: `1px solid ${C.hairline}`, background: C.surface, paddingBottom: "env(safe-area-inset-bottom)" } }, navItems)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(FitnessApp));
+</script>
+</body>
+</html>
